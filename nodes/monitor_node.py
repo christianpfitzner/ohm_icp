@@ -122,16 +122,18 @@ class MonitorNode(Node):
         self.run, self.run_id, self.last_report = evaluate.Run(), info["run"], info["t"]
         for queue in self.paths.values():
             queue.clear()
-        name = f"task{info['task']}_every{info['every']}_dmax{info['d_max']}"
+        name = f"task{info['task']}_" + ("keyframe" if info.get("keyframe") else f"every{info['every']}") \
+            + f"_dmax{info['d_max']}"
         folder = paths.lab_file("runs")
         os.makedirs(folder, exist_ok=True)
         self.file = open(os.path.join(folder, f"{name}_{time.strftime('%H%M%S')}.csv"), "w", newline="")
         self.file.write("# " + json.dumps({k: info[k] for k in ("task", "every", "d_max", "max_iter", "eps",
-                                                                 "kdtree")}) + "\n")
+                                                                 "kdtree", "keyframe") if k in info}) + "\n")
         self.writer = csv.writer(self.file)
         self.writer.writerow(COLUMNS)
+        which = "keyframes" if info.get("keyframe") else f"every {info['every']}"
         self.get_logger().info(f"new run of your node at t = {info['t']:.1f} s: task {info['task']}, "
-                               f"every {info['every']}, d_max {info['d_max']}")
+                               f"{which}, d_max {info['d_max']}")
 
     # ------------------------------------------------------------------ RViz
 

@@ -7,10 +7,16 @@ an error is what the estimate got wrong since then, not where the odometry alrea
     driven    the length of each path, m
     turned    the sum of every turn, deg: a lap of the loop is 360
     error     position and heading of the odometry and of ICP against the truth, now
+
+`driven` and `turned` are summed in pieces of at least SEGMENT m or SEGMENT_TURN of the true path: a pose that
+comes 20 times a second shakes a little, and the shaking summed up would make a path look a few % too long.
 """
 import math
 
 from . import route
+
+SEGMENT = 0.2                           # m of the true path per piece of `driven` and `turned`
+SEGMENT_TURN = math.radians(10.0)       # or this much of a true turn
 
 
 def compose(a, b):
@@ -52,10 +58,12 @@ class Run:
             return []
         self.t = t
         rel = {name: compose(inverse(self.start[name]), poses[name]) for name in self.NAMES}
-        for name in self.NAMES:
-            self.driven[name] += math.dist(self.last[name][:2], rel[name][:2])
-            self.turned[name] += abs(wrap(rel[name][2] - self.last[name][2]))
-        self.last = rel
+        if (math.dist(self.last["truth"][:2], rel["truth"][:2]) >= SEGMENT
+                or abs(wrap(rel["truth"][2] - self.last["truth"][2])) >= SEGMENT_TURN):
+            for name in self.NAMES:
+                self.driven[name] += math.dist(self.last[name][:2], rel[name][:2])
+                self.turned[name] += abs(wrap(rel[name][2] - self.last[name][2]))
+            self.last = rel
         for name in ("odom", "icp"):
             e = compose(inverse(rel["truth"]), rel[name])
             self.error[name] = (math.hypot(e[0], e[1]), abs(e[2]))

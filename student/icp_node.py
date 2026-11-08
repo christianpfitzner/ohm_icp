@@ -9,6 +9,8 @@ The node is given; the ICP it runs is yours, in `icp.py` and `scan_odometry.py` 
     task 1   ICP alone:            every `every`-th scan is matched onto the scan before (the model),
                                    ICP starts at the identity; the pose is the chain of all matches
     task 2   ICP and odometry:     the same, ICP starts at the step the odometry measured
+    keyframe extra task Z.2:       every scan is matched onto the keyframe, a scan that stays the model until
+                                   the robot is key_dist or key_angle away from it (needs kdtree:=true)
 
 The pose starts where the odometry is when the node starts (at the start of the simulator: the spawn).
 Results: /<robot>/icp/pose (the pose after every match), /<robot>/icp/markers (model, data and pairs of
@@ -48,6 +50,9 @@ PARAMETERS = {
     "max_iter": 50,             # iterations of ICP at most
     "eps": 1e-7,                # m^2: stop when the error changed by less than this
     "kdtree": False,            # extra task Z.1: step 1 with a kd-tree
+    "keyframe": False,          # extra task Z.2: every scan onto the keyframe instead of every n-th onto the last
+    "key_dist": 0.5,            # m: a new keyframe when the robot is this far from the old one (STUDENT Z.2)
+    "key_angle": 20.0,          # deg: or turned this much
 }
 RESTART = 5.0                   # s: a longer step (or a step back) means the simulator was restarted
 
@@ -66,13 +71,21 @@ class IcpNode(Node):
         self.pub_info = self.create_publisher(String, f"/{robot}/icp/info", 10)
         self.pub_markers = self.create_publisher(MarkerArray, f"/{robot}/icp/markers", 1)
         start = "the identity" if self.task == 1 else "the odometry"
+        if self.p["keyframe"]:
+            start = "the last match" if self.task == 1 else "the odometry"
+            which = f"every scan onto the keyframe (new after {self.p['key_dist']} m or {self.p['key_angle']} deg)"
+            if not self.p["kdtree"]:
+                self.get_logger().warn("keyframe without kdtree:=true: brute force is too slow for 20 scans a second")
+        else:
+            which = f"every {self.p['every']}. scan"
         self.get_logger().info(
-            f"task {self.task} (ICP from {start}), every {self.p['every']}. scan, d_max {self.p['d_max']} m, "
+            f"task {self.task} (ICP from {start}), {which}, d_max {self.p['d_max']} m, "
             f"max_iter {self.p['max_iter']}, eps {self.p['eps']:g}" + (", kd-tree" if self.p["kdtree"] else "")
             + f"; waiting for /{robot}/scan and /{robot}/odom")
 
     def reset(self) -> None:
         self.pose, self.model, self.run = None, None, None
+        self.key_pose, self.last_T, self.keyframes = None, np.eye(3), 0     # the pose at the model, the last match
         self.first_scan, self.scans, self.last_scan, self.last_log = None, 0, None, -1e9
         self.matches, self.iterations, self.ms, self.pairs, self.error = 0, 0, 0.0, 0, 0.0
 
@@ -107,6 +120,7 @@ class IcpNode(Node):
         if self.model is None:                                  # the first scan: the start
             o = odom.pose.pose
             self.pose = icp.se2(o.position.x, o.position.y, scan_odometry.yaw(o.orientation))
+            self.key_pose = self.pose
             self.model = (t, scan_odometry.scan_to_points(msg), odom)
             self.run = t
             x, y, th = icp.pose_of(self.pose)
@@ -114,23 +128,32 @@ class IcpNode(Node):
                                    f"t = {t:.1f} s, {len(self.model[1])} points in the first scan")
             self.publish(t, None, None, None)
             return
+        keyframe = bool(self.p["keyframe"])
         period = (t - self.first_scan) / (self.scans - 1) if self.scans > 1 else 0.05   # mean, from the stamps
-        if round((t - self.model[0]) / period) < int(self.p["every"]):
+        if not keyframe and round((t - self.model[0]) / period) < int(self.p["every"]):
             return                                              # not this one: every n-th scan only
         data = scan_odometry.scan_to_points(msg)
-        guess = scan_odometry.odom_guess(self.model[2], odom) if self.task >= 2 else None
+        if self.task >= 2:
+            guess = scan_odometry.odom_guess(self.model[2], odom)
+        else:
+            guess = self.last_T if keyframe else None          # Z.2: the robot moved on from the last match
         begin = time.perf_counter()
         T, info = icp.icp(self.model[1], data, guess, max_iter=int(self.p["max_iter"]), eps=float(self.p["eps"]),
                           d_max=float(self.p["d_max"]), kdtree=bool(self.p["kdtree"]))
         ms = (time.perf_counter() - begin) * 1e3
-        before = self.pose
-        self.pose = scan_odometry.next_pose(self.pose, T)
+        before = self.key_pose                                  # where the robot was at the model
+        self.pose = scan_odometry.next_pose(self.key_pose, T)
         self.matches += 1
         self.iterations += info["iterations"]
         self.ms += ms
         self.pairs, self.error = info["pairs"], info["error"]
         self.publish(t, before, data, (T, guess, info, ms))
-        self.model = (t, data, odom)
+        if not keyframe or scan_odometry.new_keyframe(T, float(self.p["key_dist"]),
+                                                      math.radians(float(self.p["key_angle"]))):
+            self.model, self.key_pose, self.last_T = (t, data, odom), self.pose, np.eye(3)
+            self.keyframes += 1
+        else:
+            self.last_T = T
 
     # ------------------------------------------------------------------ results
 
@@ -146,6 +169,7 @@ class IcpNode(Node):
         info = {"run": self.run, "t": t, "x": x, "y": y, "th": th, "task": self.task,
                 "every": int(self.p["every"]), "d_max": self.p["d_max"],
                 "max_iter": int(self.p["max_iter"]), "eps": self.p["eps"], "kdtree": bool(self.p["kdtree"]),
+                "keyframe": bool(self.p["keyframe"]), "keyframes": self.keyframes,
                 "matches": self.matches, "iterations": self.iterations / n, "ms": self.ms / n}
         if match is not None:
             T, guess, last, ms = match
@@ -159,7 +183,8 @@ class IcpNode(Node):
             self.get_logger().info(
                 f"t {t:6.1f} s | pose ({x:6.2f}, {y:6.2f}) m {math.degrees(th):7.1f} deg | match {self.matches}: "
                 f"{last['iterations']:2d} iterations, error {math.sqrt(max(last['error'], 0.0)) * 1000:4.1f} mm, "
-                f"{last['pairs']} of {last['points']} pairs, {ms:5.1f} ms (mean {self.ms / n:5.1f} ms)")
+                f"{last['pairs']} of {last['points']} pairs, {ms:5.1f} ms (mean {self.ms / n:5.1f} ms)"
+                + (f", {self.keyframes} keyframes" if self.p["keyframe"] else ""))
 
     def draw(self, t, before, data, T, guess) -> None:
         """Model (grey) where the robot was, the data at the start of ICP (amber) and after it (red), in map."""

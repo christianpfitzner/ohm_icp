@@ -168,3 +168,14 @@ def test_extra_1_icp_with_the_kdtree():
     T_true = icp.se2(0.15, -0.08, math.radians(4.0))
     T, _ = icp.icp(M, moved(T_true, M), max_iter=100, eps=1e-12, kdtree=True)
     assert math.hypot(*icp.pose_of(np.linalg.inv(T_true) @ T)[:2]) < 0.02
+
+
+@pytest.mark.parametrize("pose, expected", [
+    ((0.3, 0.0, 0.0), False),                      # 0.3 m on, not turned
+    ((0.4, 0.4, 0.0), True),                       # 0.57 m away
+    ((0.0, 0.0, math.radians(25)), True),          # turned on the spot
+    ((0.0, 0.0, math.radians(-25)), True),         # the other way round
+    ((-0.2, 0.1, math.radians(-10)), False),
+])
+def test_extra_2_new_keyframe(pose, expected):
+    assert scan_odometry.new_keyframe(icp.se2(*pose), 0.5, math.radians(20)) is expected

@@ -35,6 +35,8 @@ Your code: `student/icp.py`, `student/scan_odometry.py`. Launch arguments: `spee
 | `d_max` | 0.3 | m, pairs farther apart do not count; 0 = all count |
 | `max_iter`, `eps` | 50, 1e-7 | at most this many iterations; stop when the error (m²) changed by less |
 | `kdtree` | false | extra task: closest points with a kd-tree |
+| `keyframe` | false | extra task: every scan onto the keyframe (with `kdtree:=true`) |
+| `key_dist`, `key_angle` | 0.5, 20 | m, deg: a new keyframe this far from the old one |
 
 ## Tests
 

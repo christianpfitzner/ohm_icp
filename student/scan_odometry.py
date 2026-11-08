@@ -3,6 +3,7 @@
     scan_to_points(msg)              the points of one scan, in the frame of the laser     STUDENT 1.1
     next_pose(pose, T)               the pose after one match                              STUDENT 1.6
     odom_guess(odom_prev, odom_now)  T as the odometry sees it, the start of ICP           STUDENT 2.1
+    new_keyframe(T, key_dist, key_angle)   is the robot far enough from the keyframe?     STUDENT Z.2
 
 Poses are 3 x 3 transforms, as T in icp.py: `pose` maps a point from the frame of the robot into the world
 (`map`). The messages are ROS messages: `ros2 interface show <type>` lists their fields.
@@ -14,7 +15,7 @@ import math
 
 import numpy as np
 
-from icp import se2
+from icp import pose_of, se2
 
 
 def scan_to_points(msg):
@@ -49,6 +50,18 @@ def odom_guess(odom_prev, odom_now):
     # seen from the pose before: the inverse of the one before, times the one now
     # TODO STUDENT 2.1
     raise NotImplementedError("STUDENT 2.1")
+
+
+def new_keyframe(T, key_dist, key_angle):
+    """Extra task Z.2: True when the newest scan becomes the keyframe, the model of the next matches.
+
+    T maps the newest scan onto the keyframe: the pose of the robot now, in the frame of the robot at the
+    keyframe. A new keyframe when the robot is more than key_dist (m) away from it or turned by more than
+    key_angle (rad), either way.
+    """
+    # how far the robot is from the keyframe and how much it turned (pose_of is given), then the two tests
+    # TODO STUDENT Z.2
+    raise NotImplementedError("STUDENT Z.2")
 
 
 def yaw(q):

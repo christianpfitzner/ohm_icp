@@ -150,6 +150,7 @@ min & task & done when \\
 110--120 & break & \\
 120--165 & \cref{sec:task2} ICP with odometry & \cref{tab:odom} is filled in \\
 165--180 & \cref{sec:extra} Extra task: the kd-tree & \\
+& \cref{sec:extra2} Extra task: every scan & if time is left \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -617,10 +618,63 @@ function instead of \thema{closest\_points}.
         And for two 3D scans of 100\,000 points each?
 \end{itemize}
 
+\newpage
+\section{Extra task: every scan\hfill{\normalsize\mdseries\color{ohmgrey}if time is left}}
+\label{sec:extra2}
+\running{}{-p task:=1 -p kdtree:=true -p keyframe:=true}
+
+In \cref{sec:task1d} the small steps failed: \thema{every} = 2 chains five times as many matches as 10, and the
+small error of each match adds up. So do not chain every scan onto the one before. Keep one scan as the model,
+the \emph{keyframe}, and match every new scan onto it, 20 times a second. Only when the robot is
+\thema{key\_dist} away from the keyframe or turned by \thema{key\_angle}, the newest scan becomes the new
+keyframe. A pose 20 times a second, but a new link in the chain only every half metre:
+\begin{equation*}
+  \matsym T_\text{robot} = \matsym T_\text{keyframe} \, \matsym T , \qquad
+  \matsym T \text{ maps the newest scan onto the keyframe.}
+\end{equation*}
+In task 1 ICP starts at the last match onto the same keyframe: the robot moved only 2.5\,cm since. The node
+does the bookkeeping. It needs the kd-tree of \cref{sec:extra}: brute force takes longer than the 50\,ms
+between two scans.
+
+\begin{todo}{Z.2}
+\datei{scan\_odometry.py}, \thema{new\_keyframe(T, key\_dist, key\_angle)}: \thema{True} when the robot is
+farther than \thema{key\_dist} from the keyframe or turned by more than \thema{key\_angle} (radians), in
+either direction.
+\end{todo}
+
+The default is 0.5\,m and 20\,\textdegree. Run one lap each with the values of \cref{tab:keyframe}
+(\thema{-p key\_dist:=1.0 -p key\_angle:=30.0}).
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{One lap, every scan onto the keyframe, ICP alone. Fill in. Keyframes: terminal 2.}
+\label{tab:keyframe}
+\begin{tabular}{@{}p{2.6cm}p{2.0cm}p{2.0cm}p{2.0cm}p{2.0cm}p{2.0cm}@{}}
+\toprule
+\thema{key\_dist}, \thema{key\_angle} & driven in m & turned in \textdegree & error in m & error in \textdegree & keyframes \\
+\midrule
+0.5, 20 & & & & & \\
+1.0, 30 & & & & & \\
+3.0, 90 & & & & & \\
+5.0, 180 & & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item Compare with \cref{tab:every}. Why is the path no longer too short?
+  \item In \cref{sec:task1d} half a metre between two scans was too much for ICP alone. Now 1\,m works. What is
+        different? (Hint: \cref{fig:match}.)
+  \item Why does 3\,m still work, and 5\,m and 180\,\textdegree{} not? What must the keyframe and the newest
+        scan have in common?
+\end{itemize}
+
+\expected[\thema{keyframe:=true}; ]{keyframe}
+
 \section{Outlook: a map}
 \label{sec:outlook}
-Your ICP chains scan to scan. Each match adds a small error, and nothing ever takes it back: it is odometry,
-only a much better one. Match the scan against a \emph{map} instead, built from all scans so far, and the
+Your ICP chains scan to scan, or keyframe to keyframe. Each link adds a small error, and nothing ever takes it
+back: it is odometry, only a much better one. Match the scan against a \emph{map} instead, built from all scans so far, and the
 error stops growing while the robot stays in known places. When it comes back after a long loop and the scan
 does not fit the map, the robot has found its own drift: that is loop closure, and with it SLAM (script,
 sections 4.2 to 4.4).

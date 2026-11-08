@@ -2,4 +2,4 @@ t   10.1 s | driven: truth   4.5 m, odom   4.7 m, ICP   1.4 m | turned: truth   
 t   20.1 s | driven: truth   9.4 m, odom   9.7 m, ICP   5.7 m | turned: truth  180, odom  186, ICP  162 deg | error: odom 0.18 m  5.4 deg, ICP 2.46 m 19.5 deg
 t   30.1 s | driven: truth  14.2 m, odom  14.7 m, ICP   7.4 m | turned: truth  270, odom  279, ICP  177 deg | error: odom 0.50 m  8.3 deg, ICP 1.43 m 94.7 deg
 t   40.1 s | driven: truth  19.1 m, odom  19.7 m, ICP   9.6 m | turned: truth  360, odom  372, ICP  207 deg | error: odom 0.45 m 11.1 deg, ICP 6.07 m 157.1 deg
-lap 1 (19 m): odom 0.46 m 10.9 deg | ICP 6.44 m 157.2 deg | 41 matches, 26 iterations and 89 ms per match
+lap 1 (19 m): odom 0.46 m 10.9 deg | ICP 6.44 m 157.2 deg | 41 matches, 26 iterations and 94 ms per match
