@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ohm_icp</name>
+  <version>0.1.0</version>
+  <description>Lab 'ICP' on the mecanum-lab simulator: scan matching after Besl and McKay, first alone, then
+    with the odometry as the start (180 minutes, Intelligente Robotik).</description>
+  <maintainer email="christian.pfitzner@th-nuernberg.de">Christian Pfitzner</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <!-- The simulator (repository ir-mecanum-lab, package mecanum_lab) is a separate checkout next door and
+       deliberately not a depend, as in ohm-odometry: ohm_icp/paths.py finds it. -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

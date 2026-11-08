@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "LAB 'ICP': the simulator side of launch/icp.launch.py.",
+    "",
+    "  world production    the furnished hall of the simulator, 20 x 12 m: racks, walls, corners",
+    "  spawns              the start of the loop in ohm_icp/route.py, heading 0",
+    "  odom.geometry       the wheel constants are a little wrong: path 3 % too long, every turn 3 % too large",
+    "  debug_truth         /<robot>/truth for the driver and the monitor, never for your node",
+    "  gui_rate 10         the window draws 10 frames per second: old laptops"
+  ],
+  "world": "production",
+  "gui_rate": 10,
+  "debug_truth": true,
+  "spawns": [[8.5, 2.5, 0.0]],
+  "odom": {
+    "geometry": {
+      "scale_xy": 1.03,
+      "lever_scale": 0.97
+    }
+  },
+  "view": {
+    "layers": {
+      "scan": true
+    }
+  }
+}

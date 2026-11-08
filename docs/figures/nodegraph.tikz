@@ -1,0 +1,21 @@
+% The ROS graph of the lab. Red: your node. Grey: given.
+\begin{tikzpicture}[font=\footnotesize, >={Stealth[length=5pt]},
+    node/.style={rectangle, rounded corners=2pt, draw=black!50, fill=black!4, minimum height=0.9cm,
+                 minimum width=2.4cm, align=center},
+    mine/.style={node, draw=ohmred, fill=ohmred!8, line width=0.9pt},
+    topic/.style={font=\scriptsize\ttfamily, fill=white, inner sep=1.5pt}]
+  \node[node] (sim) at (0,0) {simulator\\\scriptsize\texttt{mecanum\_sim}};
+  \node[mine] (icp) at (6.2,0) {your ICP\\\scriptsize\texttt{icp\_node.py}};
+  \node[node] (mon) at (11.6,0) {monitor\\\scriptsize\texttt{monitor\_node.py}};
+  \node[node] (drv) at (0,-2.4) {driver\\\scriptsize\texttt{route\_node.py}};
+  \node[node] (rviz) at (11.6,-2.4) {RViz};
+  \draw[->] (sim.20) -- node[topic, above=1pt] {/muster/scan} (icp.160);
+  \draw[->] (sim.-20) -- node[topic, below=1pt] {/muster/odom} (icp.200);
+  \draw[->] (icp) -- node[topic, above=1pt] {/muster/icp/info} (mon);
+  \draw[->] (sim.250) -- node[topic, left=1pt] {/muster/truth} (drv.110);
+  \draw[->] (drv.70) -- node[topic, right=1pt] {/muster/cmd\_vel} (sim.290);
+  \draw[->, black!50] (sim.90) -- ++(0,0.7) -| node[topic, pos=0.25, above=1pt] {/muster/truth, /muster/odom}
+        (mon.90);
+  \draw[->] (mon) -- node[topic, right=1pt] {/muster/icp\_lab/*} (rviz);
+  \draw[->] (icp.270) |- node[topic, pos=0.75, below=1pt] {/muster/icp/pose, /muster/icp/markers} (rviz.180);
+\end{tikzpicture}

@@ -1,0 +1,628 @@
+% Lab 4 of Intelligent Robotics (ASY2): ICP after Besl and McKay on laser scans, alone and with odometry.
+% Build: make  (latexmk -pdf). Figures are TikZ files in figures/, made by tools/make_figures.py.
+\documentclass[11pt,a4paper,parskip=half]{scrartcl}
+\usepackage[english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[sfdefault,lining]{FiraSans}
+\usepackage[scale=0.88]{FiraMono}
+\usepackage[a4paper,left=2.4cm,right=2.4cm,top=2.6cm,bottom=2.6cm,headsep=0.8cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,array,tabularx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,shapes.geometric}
+\usepackage[skins,breakable]{tcolorbox}
+\usepackage{fontawesome5}
+\usepackage[font=small,labelfont={bf,color=ohmred},skip=4pt]{caption}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[headsepline=0.4pt]{scrlayer-scrpage}
+\usepackage[colorlinks=true,linkcolor=ohmred,urlcolor=ohmred]{hyperref}
+\usepackage{cleveref}
+
+% ---------------------------------------------------------------- colours and headings
+\definecolor{ohmred}{HTML}{C8372D}
+\definecolor{ohmgreen}{HTML}{2E8B57}
+\definecolor{ohmamber}{HTML}{D98E04}
+\definecolor{ohmgrey}{HTML}{5A5A5A}
+\definecolor{odomblue}{HTML}{4682DC}
+\addtokomafont{disposition}{\color{ohmred}}
+\addtokomafont{section}{\Large}
+\addtokomafont{subsection}{\large}
+\setkomafont{pageheadfoot}{\small\color{ohmgrey}}
+\setkomafont{pagenumber}{\small\bfseries\color{ohmred}}
+\clearpairofpagestyles
+\ihead{Intelligent Robotics (ASY2) · Lab 4}
+\ohead{ICP}
+\ofoot{\pagemark}
+\pagestyle{scrheadings}
+
+\lstset{basicstyle=\ttfamily\small, columns=fullflexible, keepspaces=true,
+        showstringspaces=false, breaklines=true, frame=none, backgroundcolor=\color{black!5},
+        xleftmargin=8pt, xrightmargin=8pt, framexleftmargin=6pt, framexrightmargin=6pt,
+        aboveskip=4pt, belowskip=4pt}
+
+\newcommand{\thema}[1]{\texttt{#1}}
+\newcommand{\datei}[1]{\texttt{#1}}
+\newcommand{\minutes}[1]{\hfill{\normalsize\mdseries\color{ohmgrey}\faClock[regular]~#1 min}}
+\newcommand{\matsym}[1]{\mathbf{#1}}
+\renewcommand{\vec}[1]{\mathbf{#1}}
+\newcommand{\T}{^{\mathsf{T}}}
+
+% ---------------------------------------------------------------- boxes
+\tcbset{base/.style={enhanced, breakable, boxrule=0pt, arc=1.5pt, left=8pt, right=8pt,
+        top=5pt, bottom=5pt, before skip=8pt, after skip=8pt}}
+% \begin{todo}{1.3}: the block STUDENT 1.3, with its hint command at the end of the last line
+\newcommand{\hintcmd}[1]{\unskip\nobreak\hfil\penalty50\hskip1em\null\nobreak\hfil
+        \mbox{\small\color{ohmgrey}\faLightbulb[regular]~\texttt{python3 hint.py #1}}{\parfillskip=0pt\par}}
+\newtcolorbox{todo}[1]{base, colback=ohmred!5, borderline west={2.5pt}{0pt}{ohmred},
+        title={\faPen~STUDENT #1}, coltitle=ohmred, colbacktitle=ohmred!5, fonttitle=\bfseries,
+        attach title to upper={\quad}, after upper={\hintcmd{#1}}}
+\newtcolorbox{script}[1]{base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
+        title={\faBook~Lecture script, #1}, coltitle=ohmgrey, colbacktitle=black!3,
+        fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt}
+\newtcolorbox{note}{base, colback=ohmamber!8, borderline west={2.5pt}{0pt}{ohmamber}}
+\newtcolorbox{checkpoint}{base, colback=ohmgreen!7, borderline west={2.5pt}{0pt}{ohmgreen},
+        title={\faCheckCircle[regular]~Checkpoint}, coltitle=ohmgreen, colbacktitle=ohmgreen!7,
+        fonttitle=\bfseries, attach title to upper={\quad}}
+
+% \running{<launch arguments>}{<node arguments>}: what terminals 1 and 2 run during a task
+\newcommand{\running}[2]{\begin{tcolorbox}[base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
+        title={\faTerminal~Running}, coltitle=ohmgrey, colbacktitle=black!3, fonttitle=\small\bfseries,
+        toptitle=2pt, bottomtitle=0pt, fontupper=\small]
+  \begin{tabularx}{\linewidth}{@{}>{\color{ohmgrey}}l >{\raggedright\arraybackslash}X@{}}
+    terminal 1 & \texttt{ros2 launch ohm\_icp icp.launch.py#1} \\
+    terminal 2 & \texttt{ros2 run ohm\_icp icp\_node.py -\kern0pt-ros-args #2}
+  \end{tabularx}
+\end{tcolorbox}}
+% \expected[<note>]{<name>}: the paths (figures/run_<name>.tikz) and the monitor (figures/term_<name>.txt)
+\newtcolorbox{seebox}{base, colback=ohmgreen!3, borderline west={2.5pt}{0pt}{ohmgreen!60},
+        title={\faEye[regular]~What you should see}, coltitle=ohmgreen!80!black, colbacktitle=ohmgreen!3,
+        fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt, breakable=false}
+\newcommand{\expected}[2][]{\begin{seebox}
+  \centering\resizebox{0.46\linewidth}{!}{\input{figures/run_#2.tikz}}\par\smallskip
+  \raggedright{\footnotesize\color{ohmgrey}#1the first lap after the start of the node: white the truth,
+    blue the odometry, red ICP. Terminal 1, the monitor (the numbers change from run to run, the ms with the
+    computer):}
+  \lstinputlisting[basicstyle=\ttfamily\scriptsize, aboveskip=2pt, belowskip=0pt, xleftmargin=4pt,
+                   framexleftmargin=3pt, breakindent=1.5em]{figures/term_#2.txt}
+\end{seebox}}
+
+\setlist[enumerate,1]{leftmargin=*,itemsep=3pt,topsep=2pt}
+\setlist[itemize,1]{leftmargin=*,itemsep=2pt,topsep=2pt}
+
+\begin{document}
+\sloppy
+
+% ---------------------------------------------------------------- title
+\begin{tcolorbox}[enhanced, colback=ohmred, colframe=ohmred, arc=0pt, left=14pt, right=14pt,
+                  top=12pt, bottom=12pt, fontupper=\color{white}]
+  {\small Intelligent Robotics (ASY2) · Lab 4}\\[6pt]
+  {\LARGE\bfseries ICP}\\[4pt]
+  {\large How far did the robot go? Scan matching, alone and with odometry}
+\end{tcolorbox}
+
+\noindent
+\begin{tabular}{@{}>{\color{ohmgrey}}l l@{\hspace{2.4em}}>{\color{ohmgrey}}l l@{}}
+  \faClock[regular]~Duration & 180 minutes & \faUsers~Work in & pairs \\
+  \faBook~Script & Cycle 4, section 4.1 & \faFolderOpen[regular]~Files & \datei{ohm-icp/student/}
+\end{tabular}
+
+\section{Overview}
+A robot drives a loop around a rack in the hall \thema{production}, lap after lap (\cref{fig:hall}). You do
+not steer it: a driver node does. Your node has to find out how the robot moved. It has two sensors:
+\begin{itemize}
+  \item \textbf{Laser scanner}: 20 scans per second, 360 beams, up to 8\,m. Each range scatters by 1.5\,cm.
+  \item \textbf{Odometry}: 50 messages per second from the wheels. Its wheel constants are a little wrong:
+        every path is 3\,\% too long, every turn 3\,\% too large.
+\end{itemize}
+Two scans taken a moment apart see the same racks and walls, a little shifted and turned. The transform that
+maps the new scan onto the old one is the motion of the robot in between. ICP finds it. Chain all these
+motions and you have the pose of the robot: odometry from the laser.
+\begin{itemize}
+  \item \textbf{Task 1}: ICP alone, after Besl and McKay. Each match starts at ``the robot did not move''.
+  \item \textbf{Task 2}: ICP with the odometry: each match starts where the odometry says the robot went.
+\end{itemize}
+
+\begin{figure}[ht]
+  \centering
+  \input{figures/hall.tikz}
+  \caption{The hall \thema{production} of the simulator from above, 20\,m \(\times\) 12\,m. Dark: walls and
+    racks. The robot drives the red loop counter-clockwise around the lower middle rack at 0.5\,m/s:
+    19\,m and 360\,\textdegree{} per lap, about 40\,s.}
+  \label{fig:hall}
+\end{figure}
+
+\begin{table}[ht]\centering
+\caption{Schedule.}
+\label{tab:schedule}
+\begin{tabular}{@{}rll@{}}
+\toprule
+min & task & done when \\
+\midrule
+0--15 & \cref{sec:task0} The scan & \cref{tab:scan} is filled in \\
+15--55 & \cref{sec:task1} ICP on two point sets & \thema{pytest -k task1} passes up to 1.5 \\
+55--75 & \cref{sec:task1b} ICP in the loop & \cref{tab:alone} is filled in \\
+75--90 & \cref{sec:task1c} Pairs that do not belong & \cref{tab:dmax} is filled in \\
+90--110 & \cref{sec:task1d} How far apart? & \cref{tab:every} is filled in \\
+110--120 & break & \\
+120--165 & \cref{sec:task2} ICP with odometry & \cref{tab:odom} is filled in \\
+165--180 & \cref{sec:extra} Extra task: the kd-tree & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Notation} as in the script. In the code the names are short:
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+script & code & \\
+\midrule
+\(M = \{\vec m_i\}\), \(D = \{\vec d_j\}\) & \thema{M}, \thema{D} & model (the older scan) and data (the newer one), one point per row \\
+\(\vec c_m\), \(\vec c_d\) & \thema{c\_m}, \thema{c\_d} & the centroids \\
+\(M'\), \(D'\) & \thema{Mc}, \thema{Dc} & both sets shifted by their centroid \\
+\(\phi\), \(\vec t\), \(\matsym{T}\) & \thema{phi}, \thema{t}, \thema{T} & rotation, translation, the \(3\times3\) transform \\
+\(\omega_{i,j}\) & \thema{pairs\_kept} & the weight of a pair, 1 or 0 \\
+\(\epsilon\) & \thema{eps} & the stop: the error changed by less than this \\
+\bottomrule
+\end{tabular}
+\end{center}
+Everything is in metres and radians. A pose is a \(3\times3\) transform as \(\matsym{T}\): it maps a point
+from the frame of the robot into the hall (\thema{map}).
+
+\newpage
+\section{Getting started}
+\paragraph{Your own copy.} Fork \datei{ohm-icp} on GitHub (button \emph{Fork} at the top right), then clone
+your fork into the \datei{src/} folder of your workspace. Update the simulator:
+\begin{lstlisting}
+git clone git@github.com:<your-name>/ohm-icp.git
+\end{lstlisting}
+\begin{lstlisting}
+git -C ir-mecanum-lab pull
+\end{lstlisting}
+Commit after every task and push, so nothing is lost at the end of the session.
+
+\paragraph{Build.} Build once, then source the workspace in every new terminal:
+\begin{lstlisting}
+colcon build --symlink-install --packages-select mecanum_lab_interfaces mecanum_lab ohm_icp
+\end{lstlisting}
+\begin{lstlisting}
+source install/setup.bash
+\end{lstlisting}
+You do not need to build again after a change to your code. Just start the node again.
+
+\paragraph{Simulator.} One launch file starts the simulator in the hall \thema{production}, the driver, the
+monitor and RViz. The robot starts to drive at once.
+\begin{lstlisting}
+ros2 launch ohm_icp icp.launch.py
+\end{lstlisting}
+The driver steers by the exact pose on \thema{/muster/truth}. Your node never reads \thema{/truth}: it has
+to find the motion from the scans (and the odometry) alone. The monitor compares with the truth.
+
+\paragraph{Your files.} \datei{student/icp.py} (the algorithm) and \datei{student/scan\_odometry.py} (from
+the messages to the points, from the matches to the pose). You write only the few lines in the middle, marked
+\begin{lstlisting}
+# the two centroids, and both sets shifted by their own centroid (eq. 4.5 to 4.8)
+# TODO STUDENT 1.3
+raise NotImplementedError("STUDENT 1.3")
+\end{lstlisting}
+The comment above it says in words what goes there; the equation is in the task of this handout. Replace the
+\thema{raise} line by your code.
+
+\begin{note}
+\textbf{numpy} for the point sets: a set of \(N\) points is an \(N\times2\) array, one point per row.
+\thema{M[:, 0]} is the column of all \(x\), \thema{M[:, 1]} of all \(y\); \thema{M.mean(axis=0)} the mean
+of every column; \thema{M - c} subtracts \thema{c} from every row; \thema{a * b} multiplies element by
+element, \thema{np.sum(a)} adds up; \thema{A @ B} is the matrix product; \thema{np.linalg.inv(A)} the
+inverse.
+\end{note}
+
+\paragraph{The node.} \datei{student/icp\_node.py} is given. It subscribes to the scan and the odometry,
+calls your functions and publishes the pose. It runs in a second terminal:
+\begin{lstlisting}
+ros2 run ohm_icp icp_node.py --ros-args -p task:=1
+\end{lstlisting}
+If a function is not written yet, the node stops with \thema{NotImplementedError: STUDENT 1.1}: that is the
+next one to write.
+
+\paragraph{Self check.} The tests try your functions on made-up point sets, one task at a time:
+\begin{lstlisting}
+python3 -m pytest test/test_icp.py -q -k task1
+\end{lstlisting}
+
+\paragraph{Three terminals.} All of them in the workspace, sourced.
+\begin{center}\small
+\begin{tabular}{@{}>{\color{ohmgrey}}l l l@{}}
+  terminal 1 & simulator, driver, monitor, RViz & the monitor prints here every 10\,s \\
+  terminal 2 & your node           & Ctrl-C and start again after every change \\
+  terminal 3 & tests, hints, plots, \thema{ros2 topic} & \\
+\end{tabular}
+\end{center}
+Every task starts with a box \emph{Running}: what terminals 1 and 2 run. It ends with \emph{What you should
+see}: the first lap and the monitor when the task is done. RViz uses the same colours: white the true path,
+blue the odometry, red your ICP. All three start where your node started.
+
+\paragraph{The monitor and the plots.} Each start of your node is a new run. Every 10\,s the monitor prints,
+from the start of the run: how far the robot went (\emph{driven}), how much it turned (\emph{turned}, one lap
+is 360\,\textdegree), and the error of the odometry and of ICP against the truth, in position and heading.
+After each lap it prints the errors again. The monitor writes every run to \datei{runs/}; the last one as
+plots:
+\begin{lstlisting}
+ros2 run ohm_icp plot_run.py
+\end{lstlisting}
+
+\paragraph{Hints.} Stuck? Every block has three hints: the idea, how to write it in Python, and at last
+the code. Each call opens the next one, in the folder \datei{ohm-icp}:
+\begin{lstlisting}
+python3 hint.py 1.3
+\end{lstlisting}
+\thema{python3 hint.py} alone shows the hints you have opened. Try on your own first: the hints notice
+when you ask too early.
+
+\begin{figure}[!hb]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/nodegraph.tikz}}
+  \caption{The nodes and topics of the lab. Red: your node. Grey: given.}
+  \label{fig:nodes}
+\end{figure}
+
+\clearpage
+\section{Task 0: the scan\minutes{15}}
+\label{sec:task0}
+\running{}{(nothing yet)}
+
+Before you match scans, look at one. In terminal 3:
+\begin{lstlisting}
+ros2 topic hz /muster/scan
+\end{lstlisting}
+\begin{lstlisting}
+ros2 topic echo --once /muster/scan
+\end{lstlisting}
+\begin{lstlisting}
+ros2 interface show sensor_msgs/msg/LaserScan
+\end{lstlisting}
+\thema{echo} prints a long list of \thema{ranges}. Add \thema{-{}-field angle\_increment} (or another field)
+to see one field only. Fill in \cref{tab:scan}.
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.5}
+\caption{The laser scanner. Fill in.}
+\label{tab:scan}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{7.4cm}p{6.0cm}@{}}
+\toprule
+& \thema{/muster/scan} \\
+\midrule
+message type & \\
+scans per second & \\
+frame of the points (\thema{header.frame\_id}) & \\
+\thema{angle\_min}, \thema{angle\_increment} (in degrees) & \\
+number of beams & \\
+\thema{range\_min}, \thema{range\_max} & \\
+the range of a beam that hits nothing & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item Beam 0 points forward (\(x\) of the robot). In which direction does beam 90 point?
+  \item Watch the simulator window: the scan is drawn as dots. Which beams hit nothing on the loop?
+\end{itemize}
+
+\begin{checkpoint}
+A beam that hits nothing is not missing: it reads \thema{range\_max}. It is no point of a wall, and your code
+has to drop it.
+\end{checkpoint}
+
+\newpage
+\section{Task 1: ICP on two point sets\minutes{40}}
+\label{sec:task1}
+\running{}{(nothing yet, the tests first)}
+
+First the algorithm itself, without ROS: \datei{icp.py}, the four steps of the script.
+
+\begin{script}{section 4.1.3, ICP after Besl and McKay}
+\begin{enumerate}[label=\arabic*.]
+  \item For each point \(\vec d_j \in D\) find the closest point \(\vec m_i \in M\).
+  \item From these pairs compute \(\matsym R\) and \(\vec t\) that minimise
+        \begin{equation}
+          E(\matsym R, \vec t) = \frac{1}{N} \sum_{i=1}^{N} \|\vec m_i - (\matsym R \vec d_i + \vec t)\|^2 .
+          \tag{4.4}
+        \end{equation}
+  \item Apply the transform to \(D\).
+  \item If the error changed by less than \(\epsilon\), stop; otherwise go to 1.
+\end{enumerate}
+Step 2 in closed form. The centroids, and both sets shifted by them:
+\begin{equation}
+  \vec c_m = \frac1N \sum_{i=1}^{N} \vec m_i, \quad \vec c_d = \frac1N \sum_{i=1}^{N} \vec d_i, \qquad
+  \vec m'_i = \vec m_i - \vec c_m, \quad \vec d'_i = \vec d_i - \vec c_d .
+  \tag{4.5--4.8}
+\end{equation}
+The rotation and the translation:
+\begin{align}
+  \phi &= \operatorname{atan2}\Big( \sum_{i=1}^{N} \big(y'_{m,i}\, x'_{d,i} - x'_{m,i}\, y'_{d,i}\big),\;
+                                    \sum_{i=1}^{N} \big(x'_{m,i}\, x'_{d,i} + y'_{m,i}\, y'_{d,i}\big) \Big) ,
+  \tag{4.14}\\
+  \vec t &= \vec c_m - \matsym R(\phi)\, \vec c_d ,
+  \tag{4.17}
+\end{align}
+and as one transform
+\(\matsym T = \big(\begin{smallmatrix} \cos\phi & -\sin\phi & t_x\\ \sin\phi & \cos\phi & t_y\\ 0&0&1
+\end{smallmatrix}\big)\) (4.18).
+\end{script}
+
+\begin{todo}{1.2}
+\thema{closest\_points(D, M)}, step 1, brute force: for every row of \thema{D} the index of the closest row of
+\thema{M} and its distance. \thema{diff}, all differences \(\vec d_j - \vec m_i\), is given.
+\end{todo}
+
+\begin{todo}{1.3}
+\thema{best\_transform(M, D)}: the centroids and the shifted sets (4.5--4.8). Row \(i\) of \thema{M} and of
+\thema{D} is pair \(i\).
+\end{todo}
+
+\begin{todo}{1.4}
+\thema{best\_transform}: \(\phi\) with (4.14) and \(\vec t\) with (4.17). \thema{rotation(phi)} and
+\thema{se2(x, y, phi)} are given.
+\end{todo}
+
+\begin{todo}{1.5}
+\thema{icp(M, D)}, step 3: move \thema{D\_now} by the step \thema{T\_step}, and put \thema{T\_step} on top of
+the transform so far, \thema{T}. Steps 1, 2 and 4 are given around it.
+\end{todo}
+
+\begin{note}
+The order of the product. ICP finds \(\matsym T_1\) in the first iteration, applies it, then finds
+\(\matsym T_2\) for the points that already moved. A point of \(D\) ends at
+\(\matsym T_2 \matsym T_1 \vec d\): the newest step stands on the \emph{left}. After \(n\) iterations
+\(\matsym T = \matsym T_n \cdots \matsym T_2 \matsym T_1\).
+\end{note}
+
+\thema{pytest -k task1} also tries the exercise of the script (\(M = \{(5,4), (6,2)\}\),
+\(D = \{(1.5,2.7), (2,0.5)\}\) gives \(\phi = 13.76\)\,\textdegree{} and \(\vec t = (4.18, 1.03)\)) and a
+room with a box in it, moved and turned. Tests 1.1, 1.6 and 1.7 fail until the next tasks.
+
+\begin{checkpoint}
+\thema{pytest -k "task1 and not task1\_1 and not task1\_6 and not task1\_7"} passes. Why is one iteration
+enough for the exercise of the script, and not for the room?
+\end{checkpoint}
+
+\newpage
+\section{Task 1: ICP in the loop\minutes{20}}
+\label{sec:task1b}
+\running{}{-p task:=1 -p d\_max:=0}
+
+Now the scans of the robot. The node keeps the last matched scan as the model \(M\). Every tenth scan (twice a
+second) becomes the data \(D\): ICP maps it onto the model, the result \(\matsym T\) is the motion of the robot
+in between. Then the new scan is the model for the next match.
+
+\begin{todo}{1.1}
+\datei{scan\_odometry.py}, \thema{scan\_to\_points(msg)}: the points of one scan in the frame of the laser,
+\((r \cos\alpha,\ r \sin\alpha)\) with \(\alpha\) = \thema{angle\_min} + \(i\,\cdot\) \thema{angle\_increment}.
+Drop every beam without an echo (\cref{tab:scan}).
+\end{todo}
+
+\(\matsym T\) maps the new scan onto the old one: it is the pose of the robot now, in the frame of the robot at
+the old scan. The pose at the old scan maps that frame into the hall.
+
+\begin{todo}{1.6}
+\thema{next\_pose(pose, T)}: the pose at the new scan, from the pose at the old scan and \(\matsym T\). Both
+are \(3\times3\) transforms.
+\end{todo}
+
+Start the node. It starts where the odometry is. Watch RViz: grey the model, amber the new scan where ICP
+starts, red the new scan where ICP put it, light blue the pairs. Let the robot drive one full lap
+(\(\approx 40\)\,s) and take the line \thema{lap 1} of the monitor. Fill in \cref{tab:alone}.
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{One lap, ICP alone with \thema{d\_max:=0}. Fill in.}
+\label{tab:alone}
+\begin{tabular}{@{}p{3.0cm}p{2.3cm}p{2.3cm}p{2.3cm}p{2.3cm}@{}}
+\toprule
+& driven in m & turned in \textdegree & error in m & error in \textdegree \\
+\midrule
+truth & & 360 & --- & --- \\
+odometry & & & & \\
+ICP & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item Which of the two is better in heading? Which one in distance?
+  \item In RViz, watch the pairs while the robot passes a rack. Do all of them connect the same wall?
+\end{itemize}
+
+\expected[\thema{d\_max:=0}; ]{dmax0}
+
+\begin{checkpoint}
+The ICP path has about the right shape, but it is too short, and its heading is no better than the one of
+the odometry. The next task finds out why.
+\end{checkpoint}
+
+\newpage
+\section{Task 1: pairs that do not belong\minutes{15}}
+\label{sec:task1c}
+\running{}{-p task:=1 \textsf{, then} -p d\_max:=1.0}
+
+The new scan sees things the old one did not: the side of a rack that came into view, a wall that was out of
+range. Step 1 still finds a closest point for each of them, a wrong pair. Wrong pairs pull the result off. In
+(4.3) of the script every pair has a weight \(\omega_{i,j}\), 1 or 0. Give the weight 0 to every pair farther
+apart than \thema{d\_max}.
+
+\begin{todo}{1.7}
+\datei{icp.py}, \thema{pairs\_kept(distance, d\_max)}: \thema{True} for every pair whose distance is at most
+\thema{d\_max}.
+\end{todo}
+
+The default is \thema{d\_max} = 0.3\,m. Run one lap with it, then one with 1.0\,m. Fill in \cref{tab:dmax}
+(the row 0 is from \cref{tab:alone}).
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{One lap, ICP alone, three values of \thema{d\_max}. Fill in.}
+\label{tab:dmax}
+\begin{tabular}{@{}p{3.0cm}p{2.3cm}p{2.3cm}p{2.3cm}p{2.3cm}@{}}
+\toprule
+\thema{d\_max} in m & driven in m & turned in \textdegree & error in m & error in \textdegree \\
+\midrule
+0 (all pairs) & & & & \\
+0.3 & & & & \\
+1.0 & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item Why does 1.0\,m help less than 0.3\,m?
+  \item The robot moves 25\,cm between two matches on a straight. What would happen with \thema{d\_max} = 0.1\,m?
+        Try it.
+\end{itemize}
+
+\expected[\thema{d\_max:=0.3}; ]{alone}
+
+\begin{checkpoint}
+\thema{pytest -k task1} passes. With \thema{d\_max} = 0.3\,m ICP alone is better than the odometry in
+heading by more than a factor two. In position it is not better: its path is still too short.
+\end{checkpoint}
+
+\newpage
+\section{Task 1: how far apart?\minutes{20}}
+\label{sec:task1d}
+\running{}{-p task:=1 -p every:=2 \textsf{, then 5 and 20}}
+
+\thema{every} says which scans are matched: 10 is every tenth scan, twice a second. Try 2, 5 and 20, one lap
+each (\cref{tab:every}, the row 10 is from \cref{tab:dmax}).
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{One lap, ICP alone, \thema{d\_max} = 0.3\,m. Fill in. ms: per match, terminal 2.}
+\label{tab:every}
+\begin{tabular}{@{}p{1.9cm}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}@{}}
+\toprule
+\thema{every} & driven in m & turned in \textdegree & error in m & error in \textdegree & ms \\
+\midrule
+2 & & & & & \\
+5 & & & & & \\
+10 & & & & & \\
+20 & & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \thema{every} = 2: the path is far too short. Each match finds a little too little motion: the beams
+        of both scans hit the wall at almost the same places, and ICP stops where every point sits on its old
+        neighbour, a local minimum. What does that small error per match do when there are five times as many
+        matches?
+  \item \thema{every} = 20: half a metre and up to 36\,\textdegree{} in a corner between two scans. Look at the
+        first match after a corner in RViz (\cref{fig:match}, left). Why does ICP fall into the wrong minimum
+        here? What does \thema{d\_max} do to the right pairs, which are now more than 0.3\,m apart?
+\end{itemize}
+
+\begin{figure}[ht]
+  \centering
+  \resizebox{0.92\linewidth}{!}{\input{figures/match.tikz}}
+  \caption{One match 20 scans apart in a corner, in the frame of the robot at the old scan (white dot). Grey
+    the model, amber the new scan where ICP starts, red where ICP put it. Left, task 1, from the identity:
+    0.5\,m off. Right, task 2, from the odometry: 1\,cm off.}
+  \label{fig:match}
+\end{figure}
+
+\expected[\thema{every:=20}; ]{every20}
+
+\begin{checkpoint}
+Explain with \cref{tab:every}: too close and the small errors of many matches add up; too far and ICP starts
+outside the valley of the right minimum. The script calls this convergence to a \emph{local} minimum.
+\end{checkpoint}
+
+\newpage
+\section{Task 2: ICP with odometry\minutes{45}}
+\label{sec:task2}
+\running{}{-p task:=2 -p every:=2 \textsf{, then 5, 10 and 20}}
+
+ICP alone starts every match at the identity, as if the robot had not moved. The odometry knows better: it
+measured how far the robot went and how much it turned. Start ICP there. The odometry gives two poses in its
+own frame, \(\matsym T_\text{before}\) at the old scan and \(\matsym T_\text{now}\). The motion in between,
+in the frame of the robot at the old scan:
+\begin{equation*}
+  \matsym T_0 = \matsym T_\text{before}^{-1}\, \matsym T_\text{now} .
+\end{equation*}
+\thema{icp(M, D, T\_init)} moves \(D\) by \(\matsym T_0\) first and starts the product with it. The rest of
+ICP stays as it is.
+
+\begin{todo}{2.1}
+\datei{scan\_odometry.py}, \thema{odom\_guess(odom\_prev, odom\_now)}: \(\matsym T_0\) from two
+\thema{nav\_msgs/msg/Odometry}. \thema{se2} and \thema{yaw} are given.
+\end{todo}
+
+Start the node with \thema{task:=2} and try the values of \cref{tab:odom}, one lap each.
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{One lap, ICP with the odometry as the start. Fill in. ms: per match, terminal 2.}
+\label{tab:odom}
+\begin{tabular}{@{}p{2.6cm}p{2.0cm}p{2.0cm}p{2.0cm}p{2.0cm}p{2.0cm}@{}}
+\toprule
+\thema{every}, \thema{d\_max} & driven in m & turned in \textdegree & error in m & error in \textdegree & ms \\
+\midrule
+2, 0.3 & & & & & \\
+5, 0.3 & & & & & \\
+10, 0.3 & & & & & \\
+20, 0.3 & & & & & \\
+10, 0 & & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \thema{every} = 20 failed in task 1. Why does it work now (\cref{fig:match}, right)? Why does ICP need
+        fewer iterations?
+  \item The odometry drives 3\,\% too far. ICP starts from it. Does the ICP path come out 3\,\% too long?
+  \item \thema{every} = 2 is still too short, even from the odometry. Why does a good start not help here?
+  \item Without \thema{d\_max} (last row) ICP is about as bad in heading as the odometry it started from,
+        or worse. Why?
+  \item Which sensor knows the distance well, which the heading? Which \thema{every} do you keep?
+\end{itemize}
+
+\expected[\thema{every:=10}; ]{odom}
+
+\begin{checkpoint}
+\thema{pytest -k task2} passes. After one lap ICP with odometry is more than five times better than the
+odometry, in position and in heading. Show the plots of \thema{plot\_run.py} for task 1 and task 2.
+\end{checkpoint}
+
+\newpage
+\section{Extra task: the kd-tree\minutes{15}}
+\label{sec:extra}
+\running{}{-p task:=1 -p kdtree:=true}
+
+Step 1 is the expensive one. Brute force compares every point of \(D\) with every point of \(M\):
+\(\mathcal O(N_d N_m)\) per iteration, here about \(300 \times 300\). A kd-tree of \(M\) is built once per match,
+\(\mathcal O(N_m \log N_m)\); then each query costs \(\mathcal O(\log N_m)\) (script, section 4.1.3).
+\thema{scipy.spatial.cKDTree} is such a tree. With \thema{-p kdtree:=true} the node builds it and calls your
+function instead of \thema{closest\_points}.
+
+\begin{todo}{Z.1}
+\datei{icp.py}, \thema{closest\_points\_kdtree(D, tree)}: the same \thema{(index, distance)} as
+\thema{closest\_points}, with one call of \thema{tree.query(D)}.
+\end{todo}
+
+\begin{itemize}
+  \item Compare the ms per match in terminal 2 with \cref{tab:every} (\thema{every} = 10). How many times
+        faster? Is the pose the same?
+  \item Brute force needs \(N_d N_m\) distances per iteration. How many is that for two scans of 300 points?
+        And for two 3D scans of 100\,000 points each?
+\end{itemize}
+
+\section{Outlook: a map}
+\label{sec:outlook}
+Your ICP chains scan to scan. Each match adds a small error, and nothing ever takes it back: it is odometry,
+only a much better one. Match the scan against a \emph{map} instead, built from all scans so far, and the
+error stops growing while the robot stays in known places. When it comes back after a long loop and the scan
+does not fit the map, the robot has found its own drift: that is loop closure, and with it SLAM (script,
+sections 4.2 to 4.4).
+
+\end{document}
