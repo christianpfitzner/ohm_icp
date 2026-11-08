@@ -8,7 +8,7 @@ after Besl and McKay, first alone, then with the odometry as the start. Handout:
 ```bash
 cd ~/ros2_ws/src
 git clone git@github.com:christianpfitzner/ir-mecanum-lab.git
-git clone git@github.com:christianpfitzner/ohm-icp.git
+git clone git@github.com:christianpfitzner/ohm_icp.git
 cd ~/ros2_ws
 colcon build --symlink-install --packages-select mecanum_lab_interfaces mecanum_lab ohm_icp
 source install/setup.bash
